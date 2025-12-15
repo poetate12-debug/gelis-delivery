@@ -1,0 +1,287 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies for all apps
+      run: |
+        npm ci
+        cd customer-app && npm ci
+        cd ../partner-app && npm ci
+        cd ../driver-app && npm ci
+        cd ../admin-panel && npm ci
+
+    - name: Copy shared files to apps
+      run: |
+        # Copy shared files to prevent import errors
+        for app in customer-app partner-app driver-app admin-panel; do
+          cp shared/firebaseServices.js $app/src/
+          cp shared/config.js $app/src/
+        done
+
+    - name: Fix import paths
+      run: |
+        # Fix import paths for customer-app
+        sed -i 's|../firebaseServices.js|./firebaseServices.js|g' customer-app/src/contexts/AuthContext.jsx
+        sed -i 's|../config.js|./config.js|g' customer-app/src/contexts/AuthContext.jsx
+        sed -i 's|../firebaseServices.js|./firebaseServices.js|g' customer-app/src/pages/HomePage.jsx
+
+        # Fix import paths for partner-app
+        sed -i 's|../firebaseServices.js|./firebaseServices.js|g' partner-app/src/contexts/AuthContext.jsx
+        sed -i 's|../config.js|./config.js|g' partner-app/src/contexts/AuthContext.jsx
+
+    - name: Fix PostCSS configurations
+      run: |
+        # Fix PostCSS config for all apps
+        for app in customer-app partner-app driver-app admin-panel; do
+          cat > $app/postcss.config.js << 'EOF'
+        export default {
+          plugins: {
+            '@tailwindcss/postcss': {},
+            autoprefixer: {},
+          },
+        }
+        EOF
+        done
+
+    - name: Build Customer App
+      run: |
+        cd customer-app
+        npm run build
+
+    - name: Build Partner App
+      run: |
+        cd partner-app
+        npm run build
+
+    - name: Build Driver App
+      run: |
+        cd driver-app
+        npm run build
+
+    - name: Build Admin Panel
+      run: |
+        cd admin-panel
+        npm run build
+
+    - name: Create deployment structure
+      run: |
+        # Clean and create dist folder
+        rm -rf dist
+        mkdir -p dist/customer dist/partner dist/driver dist/admin
+
+        # Copy build files
+        cp -r customer-app/dist/* dist/customer/
+        cp -r partner-app/dist/* dist/partner/
+        cp -r driver-app/dist/* dist/driver/
+        cp -r admin-panel/dist/* dist/admin/
+
+        # Copy customer app to root (main app for customers)
+        cp customer-app/dist/index.html dist/index.html
+        cp -r customer-app/dist/assets dist/assets
+        cp customer-app/dist/vite.svg dist/vite.svg
+
+        # Copy landing page for /apps route
+        mkdir -p dist/apps
+        cat > dist/apps/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apps - GELIS DELIVERY</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="text-center">
+            <i class="fas fa-utensils text-6xl text-red-600 mb-4"></i>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">GELIS DELIVERY</h1>
+            <p class="text-xl text-gray-600 mb-8">Pilih Aplikasi</p>
+            <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                <a href="/partner/" class="bg-green-600 text-white p-4 rounded-lg hover:bg-green-700 transition">
+                    <i class="fas fa-store text-2xl mb-2"></i>
+                    <p>Partner</p>
+                </a>
+                <a href="/driver/" class="bg-yellow-600 text-white p-4 rounded-lg hover:bg-yellow-700 transition">
+                    <i class="fas fa-motorcycle text-2xl mb-2"></i>
+                    <p>Driver</p>
+                </a>
+                <a href="/admin/" class="bg-purple-600 text-white p-4 rounded-lg hover:bg-purple-700 transition col-span-2">
+                    <i class="fas fa-cogs text-2xl mb-2"></i>
+                    <p>Admin Panel</p>
+                </a>
+            </div>
+            <a href="/" class="inline-block mt-6 text-blue-600 hover:text-blue-700">
+                <i class="fas fa-arrow-left mr-2"></i>Kembali ke Customer App
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+        EOF
+
+    - name: Create .htaccess
+      run: |
+        cat > dist/.htaccess << 'EOF'
+# GELIS DELIVERY - Hostinger Configuration
+RewriteEngine On
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Cache Control for static assets
+    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
+# MIME Types
+AddType application/javascript .js
+AddType text/css .css
+AddType image/svg+xml .svg
+AddType image/x-icon .ico
+AddType application/manifest+json .webmanifest
+
+# Customer App at root - handle SPA routing
+RewriteCond %{REQUEST_URI} ^/$ [OR]
+RewriteCond %{REQUEST_URI} ^/login [OR]
+RewriteCond %{REQUEST_URI} ^/register [OR]
+RewriteCond %{REQUEST_URI} ^/warung [OR]
+RewriteCond %{REQUEST_URI} ^/warung/ [OR]
+RewriteCond %{REQUEST_URI} ^/cart [OR]
+RewriteCond %{REQUEST_URI} ^/orders [OR]
+RewriteCond %{REQUEST_URI} ^/profile
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . index.html [L]
+
+# Apps landing page
+RewriteCond %{REQUEST_URI} ^/apps/?$ [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule . apps/index.html [L]
+
+# Partner App
+RewriteCond %{REQUEST_URI} ^/partner [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^partner/(.*)$ partner/index.html [L,QSA]
+
+# Driver App
+RewriteCond %{REQUEST_URI} ^/driver [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^driver/(.*)$ driver/index.html [L,QSA]
+
+# Admin Panel
+RewriteCond %{REQUEST_URI} ^/admin [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^admin/(.*)$ admin/index.html [L,QSA]
+
+# Redirects
+RewriteRule ^customer$ / [R=301,L]
+RewriteRule ^customer/$ / [R=301,L]
+RewriteRule ^partner$ partner/ [R=301,L]
+RewriteRule ^driver$ driver/ [R=301,L]
+RewriteRule ^admin$ admin/ [R=301,L]
+
+# Handle 404 errors
+ErrorDocument 404 /index.html
+
+# Disable directory listing
+Options -Indexes
+EOF
+
+    - name: Create deployment info
+      run: |
+        cat > dist/DEPLOYMENT_INFO.md << 'EOF'
+# GELIS DELIVERY - Deployment Information
+
+## URLs
+- **Main App (Customers)**: https://gelis-delivery.cloud/
+- **Partner Dashboard**: https://gelis-delivery.cloud/partner/
+- **Driver App**: https://gelis-delivery.cloud/driver/
+- **Admin Panel**: https://gelis-delivery.cloud/admin/
+- **Apps Menu**: https://gelis-delivery.cloud/apps/
+
+## Deployed On
+$(date)
+
+## Git Commit
+$(git rev-parse HEAD)
+
+## Apps Structure
+- Root (/): Customer App - Main app for food ordering
+- /partner/: Partner Dashboard - Restaurant management
+- /driver/: Driver App - Delivery driver app
+- /admin/: Admin Panel - System administration
+- /apps/: Apps selection page
+
+## Features
+- ✅ PWA enabled for all mobile apps
+- ✅ Firebase authentication via WhatsApp
+- ✅ Real-time notifications
+- ✅ Mobile-first responsive design
+- ✅ Production optimized builds
+EOF
+
+    - name: Upload to Hostinger (Manual)
+      uses: actions/upload-artifact@v4
+      with:
+        name: gelis-delivery-hostinger
+        path: dist/
+        retention-days: 30
+
+    - name: Deployment Summary
+      run: |
+        echo "## 🚀 Deployment Ready for Hostinger" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "All apps have been built and are ready for deployment!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📱 Application URLs" >> $GITHUB_STEP_SUMMARY
+        echo "- **Customers App**: https://gelis-delivery.cloud/ (Main app)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Partner Dashboard**: https://gelis-delivery.cloud/partner/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Driver App**: https://gelis-delivery.cloud/driver/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Admin Panel**: https://gelis-delivery.cloud/admin/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Apps Menu**: https://gelis-delivery.cloud/apps/" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📂 Deployment Instructions" >> $GITHUB_STEP_SUMMARY
+        echo "1. Download the 'gelis-delivery-hostinger' artifact from this workflow" >> $GITHUB_STEP_SUMMARY
+        echo "2. Extract the ZIP file" >> $GITHUB_STEP_SUMMARY
+        echo "3. Upload ALL files and folders to your Hostinger public_html directory" >> $GITHUB_STEP_SUMMARY
+        echo "4. Make sure .htaccess file is uploaded" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔥 Firebase Setup" >> $GITHUB_STEP_SUMMARY
+        echo "Don't forget to:" >> $GITHUB_STEP_SUMMARY
+        echo "1. Create Firebase project" >> $GITHUB_STEP_SUMMARY
+        echo "2. Enable Phone Authentication" >> $GITHUB_STEP_SUMMARY
+        echo "3. Enable Firestore Database" >> $GITHUB_STEP_SUMMARY
+        echo "4. Update Firebase config in the deployed files" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ✅ What's Fixed" >> $GITHUB_STEP_SUMMARY
+        echo "- Fixed PostCSS configuration for all apps" >> $GITHUB_STEP_SUMMARY
+        echo "- Fixed import paths for shared files" >> $GITHUB_STEP_SUMMARY
+        echo "- Root URL now shows Customer App (not blank)" >> $GITHUB_STEP_SUMMARY
+        echo "- Proper SPA routing for Customer App" >> $GITHUB_STEP_SUMMARY
+        echo "- Added apps selection page at /apps/" >> $GITHUB_STEP_SUMMARY
