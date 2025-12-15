@@ -149,19 +149,47 @@ RewriteEngine On
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-XSS-Protection "1; mode=block"
     Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
 
     # Cache Control for static assets
     <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
+
+    # Force proper MIME types for ES modules
+    <FilesMatch "\.js$">
+        Header set Content-Type "application/javascript; charset=utf-8"
+    </FilesMatch>
+
+    <FilesMatch "\.mjs$">
+        Header set Content-Type "application/javascript; charset=utf-8"
+    </FilesMatch>
+
+    <FilesMatch "\.css$">
+        Header set Content-Type "text/css; charset=utf-8"
+    </FilesMatch>
 </IfModule>
 
 # MIME Types
-AddType application/javascript .js
-AddType text/css .css
-AddType image/svg+xml .svg
-AddType image/x-icon .ico
-AddType application/manifest+json .webmanifest
+<IfModule mod_mime.c>
+    AddType application/javascript .js
+    AddType application/javascript .mjs
+    AddType text/css .css
+    AddType image/svg+xml .svg
+    AddType image/x-icon .ico
+    AddType application/manifest+json .webmanifest
+    AddType application/wasm .wasm
+
+    # Force MIME types for ES modules
+    <FilesMatch "\.js$">
+        ForceType application/javascript
+    </FilesMatch>
+
+    <FilesMatch "\.mjs$">
+        ForceType application/javascript
+    </FilesMatch>
+</IfModule>
 
 # Customer App at root - handle SPA routing
 RewriteCond %{REQUEST_URI} ^/$ [OR]
@@ -211,6 +239,7 @@ ErrorDocument 404 /index.html
 
 # Disable directory listing
 Options -Indexes
+SetDefaultCharset UTF-8
 EOF
 
     - name: Create deployment info
