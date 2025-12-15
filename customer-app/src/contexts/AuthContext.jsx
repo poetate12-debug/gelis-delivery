@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { authService, firestoreService } from '../../../shared/firebaseServices.js';
-import { userRoles } from '../../../shared/config.js';
+import { authService, firestoreService } from '../firebaseServices.js';
+import { userRoles } from '../config.js';
 
 const AuthContext = createContext();
 

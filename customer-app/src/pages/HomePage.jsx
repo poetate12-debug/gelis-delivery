@@ -4,7 +4,7 @@ import BottomNavigation from '../components/BottomNavigation';
 import WarungList from '../components/WarungList';
 import MenuPopuler from '../components/MenuPopuler';
 import LocationModal from '../components/LocationModal';
-import { firestoreService } from '../../../shared/firebaseServices.js';
+import { firestoreService } from '../firebaseServices.js';
 
 const HomePage = () => {
   const [warungs, setWarungs] = useState([]);
