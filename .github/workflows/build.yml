@@ -63,7 +63,7 @@ jobs:
         mkdir -p dist/partner dist/driver dist/admin
         cp -r partner-app/dist/* dist/partner/
         cp -r driver-app/dist/* dist/driver/
-        cp -r admin-app/dist/* dist/admin/
+        cp -r admin-panel/dist/* dist/admin/
 
     - name: Create apps selection page
       run: |
@@ -109,67 +109,7 @@ jobs:
 HTML_EOF
 
     - name: Create .htaccess
-      run: |
-        cat > dist/.htaccess << 'HTACCESS_EOF'
-RewriteEngine On
-
-<IfModule mod_mime.c>
-    AddType application/javascript .js
-    AddType application/javascript .mjs
-    AddType text/css .css
-    AddType image/svg+xml .svg
-    AddType image/x-icon .ico
-    AddType application/manifest+json .webmanifest
-    AddType application/wasm .wasm
-    <FilesMatch "\.js$">
-        ForceType application/javascript
-    </FilesMatch>
-    <FilesMatch "\.mjs$">
-        ForceType application/javascript
-    </FilesMatch>
-</IfModule>
-
-<IfModule mod_headers.c>
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set X-XSS-Protection "1; mode=block"
-    Header always set X-Content-Type-Options "nosniff"
-    <FilesMatch "\.js$">
-        Header set Content-Type "application/javascript; charset=utf-8"
-    </FilesMatch>
-    <FilesMatch "\.css$">
-        Header set Content-Type "text/css; charset=utf-8"
-    </FilesMatch>
-    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
-        Header set Cache-Control "public, max-age=31536000, immutable"
-    </FilesMatch>
-</IfModule>
-
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(login|register|warung|warung/|cart|orders|profile)(.*)$ index.html [L]
-
-RewriteCond %{REQUEST_URI} ^/apps/?$ [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule . apps/index.html [L]
-
-RewriteCond %{REQUEST_URI} ^/partner [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^partner/(.*)$ partner/index.html [L,QSA]
-
-RewriteCond %{REQUEST_URI} ^/driver [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^driver/(.*)$ driver/index.html [L,QSA]
-
-RewriteCond %{REQUEST_URI} ^/admin [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^admin/(.*)$ admin/index.html [L,QSA]
-
-Options -Indexes
-SetDefaultCharset UTF-8
-HTACCESS_EOF
+      run: cp .htaccess.template dist/.htaccess
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
