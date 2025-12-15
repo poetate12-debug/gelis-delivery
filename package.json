@@ -1,0 +1,30 @@
+{
+  "name": "gelis-delivery-monorepo",
+  "version": "1.0.0",
+  "description": "GELIS DELIVERY - Aplikasi Layanan Pesan Antar Makanan",
+  "scripts": {
+    "dev:customer": "cd customer-app && npm run dev",
+    "dev:partner": "cd partner-app && npm run dev",
+    "dev:driver": "cd driver-app && npm run dev",
+    "dev:admin": "cd admin-panel && npm run dev",
+    "build:all": "npm run build:customer && npm run build:partner && npm run build:driver && npm run build:admin",
+    "build:customer": "cd customer-app && npm run build",
+    "build:partner": "cd partner-app && npm run build",
+    "build:driver": "cd driver-app && npm run build",
+    "build:admin": "cd admin-panel && npm run build",
+    "install:all": "npm run install:customer && npm run install:partner && npm run install:driver && npm run install:admin",
+    "install:customer": "cd customer-app && npm install",
+    "install:partner": "cd partner-app && npm install",
+    "install:driver": "cd driver-app && npm install",
+    "install:admin": "cd admin-panel && npm install"
+  },
+  "keywords": [
+    "delivery",
+    "food",
+    "pesanan",
+    "mitra",
+    "driver"
+  ],
+  "author": "GELIS DELIVERY Team",
+  "license": "MIT"
+}
